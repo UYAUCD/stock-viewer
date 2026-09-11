@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b8ff0"/>
+      <stop offset="1" stop-color="#3a63c4"/>
+    </linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- グリッド -->
+  <g stroke="#ffffff" stroke-opacity="0.18" stroke-width="3">
+    <line x1="0" y1="150" x2="512" y2="150"/>
+    <line x1="0" y1="256" x2="512" y2="256"/>
+    <line x1="0" y1="362" x2="512" y2="362"/>
+  </g>
+
+  <!-- チャートの塗り -->
+  <path d="M40 400 L120 340 L200 368 L280 270 L360 300 L440 170 L440 430 L40 430 Z"
+        fill="url(#area)"/>
+
+  <!-- 折れ線 -->
+  <path d="M40 400 L120 340 L200 368 L280 270 L360 300 L440 170"
+        fill="none" stroke="#ffffff" stroke-width="20"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 最終地点のドット -->
+  <circle cx="440" cy="170" r="24" fill="#ffffff"/>
+
+  <!-- 上矢印 -->
+  <path d="M440 130 L440 66" fill="none" stroke="#ffe27a" stroke-width="22"
+        stroke-linecap="round"/>
+  <path d="M440 34 L406 86 L474 86 Z" fill="#ffe27a"/>
+</svg>
