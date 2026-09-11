@@ -1,0 +1,13 @@
+[
+  { "symbol": "285A.T", "name": "キオクシア" },
+  { "symbol": "5803.T", "name": "フジクラ" },
+  { "symbol": "9984.T", "name": "ソフトバンクG" },
+  { "symbol": "6857.T", "name": "アドバンテスト" },
+  { "symbol": "^N225", "name": "日経平均" },
+  { "symbol": "NIY=F", "name": "日経先物" },
+  { "symbol": "AAPL", "name": "Apple" },
+  { "symbol": "NVDA", "name": "NVIDIA" },
+  { "symbol": "ARM", "name": "Arm" },
+  { "symbol": "GLW", "name": "Corning" },
+  { "symbol": "^SOX", "name": "SOX指数" }
+]

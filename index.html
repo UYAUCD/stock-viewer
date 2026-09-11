@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>株価ビューア</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="株価ビューア">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <style>
+    :root {
+      --up: #d63a3a;
+      --down: #2e8b57;
+      --bg: #f5f6fa;
+      --card: #ffffff;
+      --text: #222;
+      --muted: #888;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 20px; }
+    .view-toggle {
+      display: flex; gap: 8px; max-width: 480px; width: 100%; margin-bottom: 20px;
+      position: sticky; top: 0; z-index: 10; background: var(--bg); padding-top: 4px;
+    }
+    .view-toggle button {
+      flex: 1; padding: 10px; font-size: .95rem; border: 2px solid #ddd;
+      border-radius: 10px; background: #fff; cursor: pointer; color: #555; font-weight: 600;
+    }
+    .view-toggle button.active { border-color: #4a7fe0; color: #4a7fe0; background: #eef4fc; }
+    .card {
+      width: 100%; max-width: 480px; background: var(--card);
+      border-radius: 16px; padding: 28px; text-align: center;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    }
+    .symbol { color: var(--muted); font-size: .95rem; }
+    .name { font-size: 1.1rem; font-weight: 600; margin: 4px 0 16px; }
+    .price { font-size: 2.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .currency { font-size: 1rem; color: var(--muted); margin-left: 6px; }
+    .change { font-size: 1.3rem; font-weight: 600; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    .up   { color: var(--up); }
+    .down { color: var(--down); }
+    .flat { color: var(--muted); }
+    .prev { margin-top: 14px; color: var(--muted); font-size: .9rem; }
+    .periods { display: flex; gap: 4px; justify-content: center; margin-top: 22px; margin-bottom: 6px; }
+    .periods button {
+      padding: 4px 10px; font-size: .75rem; border: 1px solid #ddd; border-radius: 14px;
+      background: #fff; cursor: pointer; color: #777;
+    }
+    .periods button.active { background: #4a7fe0; border-color: #4a7fe0; color: #fff; }
+    #chart { width: 100%; height: 160px; margin-top: 4px; }
+    .chart-error { color: var(--muted); font-size: .8rem; margin-top: 12px; }
+    #list-view {
+      width: 100%; max-width: 480px; background: var(--card); border-radius: 16px;
+      padding: 8px 0; box-shadow: 0 2px 12px rgba(0,0,0,.08); overflow: hidden;
+    }
+    #list-view table { width: 100%; border-collapse: collapse; }
+    #list-view th {
+      font-size: .75rem; color: var(--muted); font-weight: 600;
+      padding: 10px 12px; border-bottom: 1px solid #eee; text-align: right;
+    }
+    #list-view th:first-child, #list-view td:first-child { text-align: left; padding-left: 18px; }
+    #list-view td {
+      padding: 11px 12px; border-bottom: 1px solid #f2f2f2;
+      font-size: .95rem; text-align: right; font-variant-numeric: tabular-nums;
+    }
+    #list-view tr:last-child td { border-bottom: none; }
+    #list-view tbody tr { cursor: pointer; }
+    #list-view tbody tr:hover { background: #f4f8fe; }
+    #list-view .t-name { font-weight: 600; }
+    #list-view .t-sym { color: var(--muted); font-size: .75rem; margin-left: 6px; }
+    #list-view .t-err { color: #b06a6a; font-size: .8rem; }
+    .section-label { width: 100%; max-width: 480px; font-size: .8rem; color: var(--muted); margin: 4px 0 6px; text-align: left; }
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; max-width: 480px; margin-bottom: 16px; }
+    .presets .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 8px 6px 12px; font-size: .85rem; border: 1px solid #b9cde8;
+      border-radius: 20px; background: #eef4fc; cursor: grab; color: #2c5282;
+    }
+    .presets .chip:hover { border-color: #4a7fe0; background: #e0ecfb; }
+    .presets .chip.dragging { opacity: .45; }
+    .presets .chip.drop-target { border-style: dashed; border-color: #4a7fe0; }
+    .presets .chip .del {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border: none; border-radius: 50%;
+      background: #cddcf0; color: #4a6a94; cursor: pointer; font-size: .75rem;
+      line-height: 1; padding: 0;
+    }
+    .presets .chip .del:hover { background: #d9a0a0; color: #fff; }
+    .presets .reset {
+      padding: 6px 12px; font-size: .8rem; border: none; background: none;
+      color: var(--muted); cursor: pointer; text-decoration: underline;
+    }
+    .history { display: flex; flex-wrap: wrap; gap: 6px; max-width: 480px; margin-bottom: 20px; }
+    .history .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 8px 6px 12px; font-size: .85rem; border: 1px solid #d8cfc0;
+      border-radius: 20px; background: #fdf8ef; cursor: pointer; color: #6b5b3e;
+    }
+    .history .chip:hover { border-color: #c9a44a; background: #faf0da; }
+    .history .chip .star {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border: none; border-radius: 50%;
+      background: #f2e3b3; color: #b08a2a; cursor: pointer; font-size: .7rem;
+      line-height: 1; padding: 0;
+    }
+    .history .chip .star:hover { background: #e8c860; color: #fff; }
+    .history .chip .del {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border: none; border-radius: 50%;
+      background: #e5dcc8; color: #8a7a55; cursor: pointer; font-size: .75rem;
+      line-height: 1; padding: 0;
+    }
+    .history .chip .del:hover { background: #d9a0a0; color: #fff; }
+    .history .clear {
+      padding: 6px 12px; font-size: .8rem; border: none; background: none;
+      color: #b06a6a; cursor: pointer; text-decoration: underline;
+    }
+    .search { display: flex; gap: 8px; width: 100%; max-width: 480px; margin-bottom: 12px; }
+    .search input {
+      flex: 1; padding: 12px 14px; font-size: 16px;
+      border: 2px solid #ddd; border-radius: 10px; outline: none;
+    }
+    .search input:focus { border-color: #4a7fe0; }
+    .search button {
+      padding: 12px 22px; font-size: 1rem; border: none; border-radius: 10px;
+      background: #4a7fe0; color: #fff; cursor: pointer; font-weight: bold;
+    }
+    .search button:hover { background: #3a6bc7; }
+    .error { color: var(--up); margin-top: 12px; font-size: .9rem; max-width: 480px; text-align: center; }
+    .status { color: var(--muted); font-size: .8rem; margin-top: 18px; min-height: 1em; }
+    .meta { margin-top: 12px; color: #aaa; font-size: .75rem; line-height: 1.6; text-align: center; }
+    .version { margin-top: 16px; color: #c0c0c0; font-size: .7rem; }
+    @media (max-width: 480px) {
+      body { padding: 16px 10px; }
+      h1 { font-size: 1.2rem; margin-bottom: 14px; }
+      .card { padding: 20px 14px; }
+      .price { font-size: 2.2rem; }
+      .change { font-size: 1.1rem; }
+      #chart { height: 130px; }
+      #list-view td { padding: 10px 8px; font-size: .88rem; }
+      #list-view th:first-child, #list-view td:first-child { padding-left: 12px; }
+      .presets, .history { gap: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>📈 株価ビューア</h1>
+
+  <div class="view-toggle">
+    <button id="btn-single" onclick="setView('single')">個別表示</button>
+    <button id="btn-list" class="active" onclick="setView('list')">📋 一覧モード</button>
+  </div>
+
+  <div class="card" id="card" style="display:none">
+    <div class="symbol" id="symbol-label"></div>
+    <div class="name" id="name"></div>
+    <div class="price"><span id="price"></span><span class="currency" id="currency"></span></div>
+    <div class="change" id="change"></div>
+    <div class="prev" id="prev"></div>
+    <div class="periods" id="periods">
+      <button data-range="1m" onclick="changeRange('1m')">1分足</button>
+      <button data-range="5m" onclick="changeRange('5m')">5分足</button>
+      <button data-range="d" class="active" onclick="changeRange('d')">日足</button>
+    </div>
+    <canvas id="chart"></canvas>
+    <div class="chart-error" id="chart-error"></div>
+  </div>
+
+  <div id="list-view">
+    <table>
+      <thead><tr><th>銘柄</th><th>現在値</th><th>前日比</th></tr></thead>
+      <tbody id="list-body"></tbody>
+    </table>
+  </div>
+  <div class="error" id="error"></div>
+
+  <div id="presets-wrap">
+    <div class="section-label">プリセット（★で追加、×で削除、ドラッグで並び替え）</div>
+    <div class="presets" id="presets"></div>
+  </div>
+
+  <div id="history-wrap" style="display:none">
+    <div class="section-label">検索履歴（★でプリセットに登録）</div>
+    <div class="history" id="history"></div>
+  </div>
+
+  <div class="search">
+    <input id="symbol" type="text" placeholder="銘柄コードまたは会社名 (例: 7203.T / キオクシアHD / AAPL)">
+    <button onclick="loadQuote()">表示</button>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="meta">
+    データ: Yahoo! Finance (約15分遅延・GitHub Actionsが5分ごとに更新)<br>
+    投資判断には実際の取引画面をご確認ください
+  </div>
+  <div class="version">株価ビューア v1.0.0</div>
+
+  <script>
+    const APP_VERSION = '1.0.0';
+    let timer = null;
+
+    // ---------- プリセット (localStorageに保存・編集可能) ----------
+    const PRESET_KEY = 'stockviewer_presets';
+    const PRESET_VERSION_KEY = 'stockviewer_presets_version';
+    const PRESET_VERSION = 3;
+    const PRESET_MAX = 20;
+    let dragSymbol = null;
+    const DEFAULT_PRESETS = [
+      { symbol: '285A.T', name: 'キオクシア' },
+      { symbol: '5803.T', name: 'フジクラ' },
+      { symbol: '9984.T', name: 'ソフトバンクG' },
+      { symbol: '6857.T', name: 'アドバンテスト' },
+      { symbol: '^N225',  name: '日経平均' },
+      { symbol: 'NIY=F',  name: '日経先物' },
+      { symbol: 'AAPL',   name: 'Apple' },
+      { symbol: 'NVDA',   name: 'NVIDIA' },
+      { symbol: 'ARM',    name: 'Arm' },
+      { symbol: 'GLW',    name: 'Corning' },
+      { symbol: '^SOX',   name: 'SOX指数' },
+    ];
+
+    function getPresets() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PRESET_KEY));
+        if (Array.isArray(saved)) {
+          if (Number(localStorage.getItem(PRESET_VERSION_KEY) || 1) < PRESET_VERSION) {
+            const merged = saved.slice();
+            for (const d of DEFAULT_PRESETS) {
+              if (!merged.some(p => p.symbol === d.symbol)) merged.push(d);
+            }
+            localStorage.setItem(PRESET_KEY, JSON.stringify(merged.slice(0, PRESET_MAX)));
+            localStorage.setItem(PRESET_VERSION_KEY, String(PRESET_VERSION));
+            return merged.slice(0, PRESET_MAX);
+          }
+          return saved;
+        }
+      } catch (e) {}
+      localStorage.setItem(PRESET_VERSION_KEY, String(PRESET_VERSION));
+      return DEFAULT_PRESETS.slice();
+    }
+
+    function savePresets(list) {
+      localStorage.setItem(PRESET_KEY, JSON.stringify(list));
+      renderPresets();
+      renderHistory();
+      refresh();
+    }
+
+    function addToPresets(item) {
+      if (!item || !item.symbol) return;
+      let list = getPresets().filter(p => p.symbol !== item.symbol);
+      list.unshift(item);
+      savePresets(list.slice(0, PRESET_MAX));
+    }
+
+    function removeFromPresets(symbol) {
+      savePresets(getPresets().filter(p => p.symbol !== symbol));
+    }
+
+    function resetPresets() {
+      savePresets(DEFAULT_PRESETS.slice());
+    }
+
+    function isPreset(symbol) {
+      return getPresets().some(p => p.symbol === symbol);
+    }
+
+    function renderPresets() {
+      const list = getPresets();
+      const wrap = document.getElementById('presets-wrap');
+      const box = document.getElementById('presets');
+      box.innerHTML = '';
+      if (list.length === 0) { wrap.style.display = 'none'; return; }
+      wrap.style.display = 'block';
+      for (const p of list) {
+        const chip = document.createElement('button');
+        chip.className = 'chip';
+        chip.title = p.symbol;
+        chip.draggable = true;
+        chip.innerHTML = `<span></span><span class="del" title="プリセットから削除">×</span>`;
+        chip.firstChild.textContent = p.name || p.symbol;
+        chip.addEventListener('dragstart', e => {
+          dragSymbol = p.symbol;
+          chip.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', p.symbol);
+        });
+        chip.addEventListener('dragend', () => {
+          dragSymbol = null;
+          chip.classList.remove('dragging');
+          box.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+        });
+        chip.addEventListener('dragover', e => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (dragSymbol && dragSymbol !== p.symbol) chip.classList.add('drop-target');
+        });
+        chip.addEventListener('dragleave', () => chip.classList.remove('drop-target'));
+        chip.addEventListener('drop', e => {
+          e.preventDefault();
+          chip.classList.remove('drop-target');
+          if (!dragSymbol || dragSymbol === p.symbol) return;
+          const cur = getPresets();
+          const from = cur.findIndex(x => x.symbol === dragSymbol);
+          const to = cur.findIndex(x => x.symbol === p.symbol);
+          if (from < 0 || to < 0) return;
+          const [item] = cur.splice(from, 1);
+          cur.splice(to, 0, item);
+          savePresets(cur);
+        });
+        chip.addEventListener('click', e => {
+          if (e.target.classList.contains('del')) return;
+          document.getElementById('symbol').value = p.symbol;
+          loadQuote();
+        });
+        chip.querySelector('.del').addEventListener('click', e => {
+          e.stopPropagation();
+          removeFromPresets(p.symbol);
+        });
+        box.appendChild(chip);
+      }
+      const reset = document.createElement('button');
+      reset.className = 'reset';
+      reset.textContent = '初期設定に戻す';
+      reset.addEventListener('click', resetPresets);
+      box.appendChild(reset);
+    }
+
+    // ---------- 検索履歴 (localStorageに保存) ----------
+    const HISTORY_KEY = 'stockviewer_history';
+    const HISTORY_MAX = 12;
+
+    function getHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+      catch (e) { return []; }
+    }
+
+    function saveHistory(list) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+      renderHistory();
+    }
+
+    function addToHistory(item) {
+      if (!item || !item.symbol) return;
+      let list = getHistory().filter(h => h.symbol !== item.symbol);
+      list.unshift(item);
+      saveHistory(list.slice(0, HISTORY_MAX));
+    }
+
+    function removeFromHistory(symbol) {
+      saveHistory(getHistory().filter(h => h.symbol !== symbol));
+    }
+
+    function clearHistory() {
+      saveHistory([]);
+    }
+
+    function renderHistory() {
+      const list = getHistory();
+      const wrap = document.getElementById('history-wrap');
+      const box = document.getElementById('history');
+      box.innerHTML = '';
+      if (list.length === 0) { wrap.style.display = 'none'; return; }
+      wrap.style.display = 'block';
+      for (const h of list) {
+        const chip = document.createElement('button');
+        chip.className = 'chip';
+        chip.title = h.symbol;
+        chip.innerHTML = `<span></span><span class="del" title="削除">×</span>`;
+        chip.firstChild.textContent = h.name || h.symbol;
+        if (!isPreset(h.symbol)) {
+          const star = document.createElement('span');
+          star.className = 'star';
+          star.title = 'プリセットに登録';
+          star.textContent = '★';
+          star.addEventListener('click', e => {
+            e.stopPropagation();
+            addToPresets(h);
+          });
+          chip.insertBefore(star, chip.firstChild);
+        }
+        chip.addEventListener('click', e => {
+          if (e.target.classList.contains('del') || e.target.classList.contains('star')) return;
+          document.getElementById('symbol').value = h.symbol;
+          loadQuote();
+        });
+        chip.querySelector('.del').addEventListener('click', e => {
+          e.stopPropagation();
+          removeFromHistory(h.symbol);
+        });
+        box.appendChild(chip);
+      }
+      const clear = document.createElement('button');
+      clear.className = 'clear';
+      clear.textContent = '全消去';
+      clear.addEventListener('click', clearHistory);
+      box.appendChild(clear);
+    }
+
+    // ---------- データ読み込み (GitHub Actionsが更新したJSON) ----------
+    let QUOTES = null;  // {updated, quotes:[...]}
+
+    function safeSym(sym) {
+      return sym.replace(/[^A-Za-z0-9.^=-]/g, '_');
+    }
+
+    async function loadQuotes() {
+      const res = await fetch(`data/quotes.json?t=${Date.now()}`);
+      if (!res.ok) throw new Error('データの読み込みに失敗しました');
+      QUOTES = await res.json();
+      return QUOTES;
+    }
+
+    function findQuote(symbol) {
+      if (!QUOTES) return null;
+      const s = symbol.toUpperCase();
+      return (QUOTES.quotes || []).find(q => q.symbol.toUpperCase() === s) || null;
+    }
+
+    // ---------- 日本語社名検索 (jpx_names.json) ----------
+    let JPX = null;
+    const ABBREV_MAP = {
+      'HD': 'ホールディングス',
+      'HDG': 'ホールディングス',
+      'G': 'グループ',
+    };
+
+    function normName(s) {
+      s = (s || '').normalize('NFKC').toUpperCase().trim();
+      s = s.replace(/株式会社|\(株\)|（株）|\(有\)|（有）/g, '');
+      return s.replace(/[\s　]/g, '');
+    }
+
+    async function loadJpx() {
+      if (JPX) return JPX;
+      const res = await fetch('jpx_names.json');
+      if (!res.ok) throw new Error('銘柄マスタの読み込みに失敗しました');
+      JPX = await res.json();
+      return JPX;
+    }
+
+    async function searchJpx(query) {
+      const rows = await loadJpx();
+      const q = normName(query);
+      if (!q) return [];
+      const qVariants = [q];
+      for (const [abbr, full] of Object.entries(ABBREV_MAP)) {
+        if (q.includes(abbr)) qVariants.push(q.split(abbr).join(full));
+      }
+      const scored = [];
+      for (const [code, name, boost] of rows) {
+        const nname = normName(name);
+        let best = 0;
+        for (const qv of qVariants) {
+          let s = 0;
+          if (nname === qv) s = 100;
+          else if (nname.startsWith(qv)) s = 90 - (nname.length - qv.length);
+          else if (nname.length <= qv.length && qv.startsWith(nname)) s = 80;
+          else if (qv.length >= 2 && nname.includes(qv)) s = 70 - (nname.length - qv.length);
+          if (s > best) best = s;
+        }
+        if (best > 0) scored.push([best + (boost || 0), code, name]);
+      }
+      scored.sort((a, b) => b[0] - a[0] || (a[1] < b[1] ? -1 : 1));
+      return scored.slice(0, 6).map(([s, code, name]) => ({
+        symbol: code + '.T', name, score: s,
+      }));
+    }
+
+    // ---------- 表示モード (個別 / 一覧) ----------
+    const VIEW_VERSION_KEY = 'stockviewer_view_version';
+    const VIEW_VERSION = 2;
+    let viewMode = 'list';
+    try {
+      const savedView = localStorage.getItem('stockviewer_view');
+      const savedVer = Number(localStorage.getItem(VIEW_VERSION_KEY) || 1);
+      if (savedView && savedVer >= VIEW_VERSION) viewMode = savedView;
+    } catch (e) {}
+
+    function setView(mode) {
+      viewMode = mode;
+      localStorage.setItem('stockviewer_view', mode);
+      localStorage.setItem(VIEW_VERSION_KEY, String(VIEW_VERSION));
+      document.getElementById('btn-single').classList.toggle('active', mode === 'single');
+      document.getElementById('btn-list').classList.toggle('active', mode === 'list');
+      document.getElementById('card').style.display = 'none';
+      document.getElementById('list-view').style.display = 'none';
+      document.getElementById('error').textContent = '';
+      if (mode === 'list') {
+        document.getElementById('list-view').style.display = 'block';
+        loadList();
+      }
+      restartTimer();
+    }
+
+    function refresh() {
+      if (viewMode === 'list') loadList();
+      else if (document.getElementById('symbol').value.trim()) loadQuote();
+    }
+
+    // ---------- 一覧モード ----------
+    async function loadList() {
+      const body = document.getElementById('list-body');
+      const presets = getPresets();
+      document.getElementById('status').textContent = '更新中...';
+      try {
+        await loadQuotes();
+        body.innerHTML = '';
+        for (const p of presets) {
+          const q = findQuote(p.symbol);
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td class="t-name"></td><td></td><td></td>';
+          tr.firstChild.innerHTML = `${p.name || p.symbol}<span class="t-sym">${p.symbol}</span>`;
+          if (!q || q.price == null) {
+            tr.children[1].textContent = '—';
+            tr.children[2].className = 't-err';
+            tr.children[2].textContent = 'データ未登録';
+            tr.title = 'GitHubのsymbols.jsonに追加すると取得されます';
+          } else {
+            tr.children[1].textContent = q.price.toLocaleString('ja-JP') + (q.currency === 'JPY' ? ' 円' : '');
+            const cls = q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat';
+            const sign = q.change > 0 ? '+' : '';
+            tr.children[2].className = cls;
+            tr.children[2].textContent = `${sign}${(q.change || 0).toLocaleString('ja-JP')} (${sign}${q.change_percent || 0}%)`;
+            tr.title = 'クリックで個別表示';
+            tr.addEventListener('click', () => {
+              document.getElementById('symbol').value = p.symbol;
+              loadQuote();
+            });
+          }
+          body.appendChild(tr);
+        }
+        document.getElementById('status').textContent =
+          `最終データ更新: ${QUOTES.updated || '—'}`;
+      } catch (e) {
+        document.getElementById('status').textContent = '';
+        body.innerHTML = `<tr><td colspan="3" class="t-err"></td></tr>`;
+        body.firstChild.firstChild.textContent = e.message;
+      }
+    }
+
+    // ---------- 個別表示 ----------
+    async function loadQuote() {
+      const input = document.getElementById('symbol').value.trim();
+      if (!input) return;
+      if (viewMode === 'list') setView('single');
+
+      document.getElementById('error').textContent = '';
+      document.getElementById('status').textContent = 'データ確認中...';
+      try {
+        await loadQuotes();
+        let q = findQuote(input);
+        let resolvedName = q ? (q.name || q.symbol) : null;
+
+        // コードで見つからない場合は日本語社名を検索
+        let resolvedSymbol = input.toUpperCase();
+        if (!q && /[^\x00-\x7F]/.test(input)) {
+          const results = await searchJpx(input);
+          if (results.length) {
+            resolvedSymbol = results[0].symbol;
+            resolvedName = results[0].name;
+            q = findQuote(resolvedSymbol);
+          }
+        }
+
+        if (!q || q.price == null) {
+          throw new Error(
+            `'${input}' のデータがありません。` +
+            `GitHubリポジトリの symbols.json に "${resolvedSymbol}" を追加すると自動取得されます`);
+        }
+
+        document.getElementById('card').style.display = 'block';
+        document.getElementById('symbol-label').textContent =
+          q.symbol === resolvedSymbol ? q.symbol : `${input} → ${q.symbol}`;
+        document.getElementById('name').textContent = resolvedName || '—';
+        document.getElementById('price').textContent = q.price.toLocaleString('ja-JP');
+        document.getElementById('currency').textContent = q.currency === 'JPY' ? '円' : (q.currency || '');
+
+        const cls = q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat';
+        const sign = q.change > 0 ? '+' : '';
+        const ch = document.getElementById('change');
+        ch.className = 'change ' + cls;
+        ch.textContent = `${sign}${(q.change || 0).toLocaleString('ja-JP')} (${sign}${q.change_percent || 0}%)`;
+
+        document.getElementById('prev').textContent =
+          `前日終値: ${(q.previous_close || 0).toLocaleString('ja-JP')}`;
+        document.getElementById('status').textContent = `最終データ更新: ${QUOTES.updated || '—'}`;
+
+        addToHistory({ symbol: q.symbol, name: resolvedName || q.symbol });
+        loadChart(q.symbol);
+      } catch (e) {
+        document.getElementById('card').style.display = 'none';
+        document.getElementById('error').textContent = e.message;
+        document.getElementById('status').textContent = '';
+      }
+      restartTimer();
+    }
+
+    // ---------- チャート ----------
+    let currentRange = 'd';
+    let currentChartSymbol = null;
+
+    function changeRange(r) {
+      currentRange = r;
+      document.querySelectorAll('#periods button').forEach(b =>
+        b.classList.toggle('active', b.dataset.range === r));
+      if (currentChartSymbol) loadChart(currentChartSymbol);
+    }
+
+    async function loadChart(symbol) {
+      currentChartSymbol = symbol;
+      const canvas = document.getElementById('chart');
+      const errEl = document.getElementById('chart-error');
+      errEl.textContent = '';
+      try {
+        const res = await fetch(`data/charts/${safeSym(symbol)}.json?t=${Date.now()}`);
+        if (!res.ok) throw new Error('チャートデータがありません');
+        const data = await res.json();
+        const points = data[currentRange];
+        if (!points || points.length < 2) throw new Error('この期間のデータがありません');
+        drawChart(canvas, points);
+      } catch (e) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        errEl.textContent = e.message;
+      }
+    }
+
+    function drawChart(canvas, points) {
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth || 430, h = 160;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      const pad = { t: 12, r: 10, b: 18, l: 10 };
+      const vals = points.map(p => p[1]);
+      let min = Math.min(...vals), max = Math.max(...vals);
+      if (min === max) { min -= 1; max += 1; }
+      const span = max - min;
+      min -= span * 0.08; max += span * 0.08;
+      const X = i => pad.l + (w - pad.l - pad.r) * (i / (points.length - 1));
+      const Y = v => pad.t + (h - pad.t - pad.b) * (1 - (v - min) / (max - min));
+
+      const up = vals[vals.length - 1] >= vals[0];
+      const color = up ? '#d63a3a' : '#2e8b57';
+
+      ctx.fillStyle = '#999'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+      ctx.fillText(max.toFixed(1), w - pad.r, pad.t + 8);
+      ctx.fillText(min.toFixed(1), w - pad.r, h - pad.b);
+
+      ctx.beginPath();
+      points.forEach((p, i) => { i ? ctx.lineTo(X(i), Y(p[1])) : ctx.moveTo(X(i), Y(p[1])); });
+      ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.stroke();
+      const grad = ctx.createLinearGradient(0, pad.t, 0, h);
+      grad.addColorStop(0, up ? 'rgba(214,58,58,.18)' : 'rgba(46,139,87,.18)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.lineTo(X(points.length - 1), h - pad.b);
+      ctx.lineTo(X(0), h - pad.b);
+      ctx.closePath();
+      ctx.fillStyle = grad; ctx.fill();
+
+      ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';  ctx.fillText(points[0][0], pad.l, h - 4);
+      ctx.textAlign = 'center'; ctx.fillText(points[Math.floor(points.length / 2)][0], w / 2, h - 4);
+      ctx.textAlign = 'right'; ctx.fillText(points[points.length - 1][0], w - pad.r, h - 4);
+
+      ctx.beginPath();
+      ctx.arc(X(points.length - 1), Y(vals[vals.length - 1]), 3, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+    }
+
+    function restartTimer() {
+      clearInterval(timer);
+      timer = setInterval(refresh, 60000); // 60秒ごとに再読込
+    }
+
+    function quick(s) {
+      document.getElementById('symbol').value = s;
+      loadQuote();
+    }
+
+    document.getElementById('symbol').addEventListener('keydown', e => {
+      if (e.key === 'Enter') loadQuote();
+    });
+
+    renderPresets();
+    renderHistory();
+    setView(viewMode);
+  </script>
+</body>
+</html>
